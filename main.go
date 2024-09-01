@@ -2,8 +2,11 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/goccy/go-json"
 	"github.com/rs/xid"
+	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -16,11 +19,18 @@ type Recipe struct {
 	PublishAt    time.Time `json:"publishAt"`
 }
 
-
 var recipes []Recipe
 
 func init() {
-	recipes = make([]Recipe, 0)
+
+	recipeData, err := os.ReadFile("recipes.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = json.Unmarshal(recipeData, &recipes)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func NewRecipeHandler(c *gin.Context) {
@@ -35,8 +45,13 @@ func NewRecipeHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, recipe)
 }
 
+func ListRecipesHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, recipes)
+}
+
 func main() {
 	router := gin.Default()
-	router.POST("/recipe", NewRecipeHandler)
-	router.Run()
+	router.POST("/recipes", NewRecipeHandler)
+	router.GET("/recipes", ListRecipesHandler)
+	log.Fatal(router.Run())
 }
