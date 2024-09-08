@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -25,7 +26,17 @@ func init() {
 
 	log.Println("Connected to MongoDB!")
 	collection := client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
-	recipesHandler = handlers.NewRecipesHandler(ctx, collection)
+
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379", //os.Getenv("REDIS_URI"),
+		Password: "",               //os.Getenv("REDIS_PASSWORD"),
+		DB:       0,
+	})
+	status := redisClient.Ping(context.Background())
+	log.Println(status)
+
+	recipesHandler = handlers.NewRecipesHandler(ctx, collection, redisClient)
+
 }
 
 func main() {
