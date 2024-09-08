@@ -50,11 +50,9 @@ func main() {
 		router.GET("/recipes/:id", recipesHandler.GetOneRecipeHandler)
 	}
 
-	{
-		authorized.POST("/recipes", recipesHandler.NewRecipeHandler)
-		authorized.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
-		authorized.DELETE("/recipes/:id", recipesHandler.DeleteRecipeHandler)
-	}
+	authorized.POST("/recipes", recipesHandler.NewRecipeHandler)
+	authorized.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
+	authorized.DELETE("/recipes/:id", recipesHandler.DeleteRecipeHandler)
 
 	log.Fatal(router.Run())
 }
