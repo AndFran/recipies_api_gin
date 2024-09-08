@@ -41,10 +41,18 @@ func init() {
 
 func main() {
 	router := gin.Default()
-	router.POST("/recipes", recipesHandler.NewRecipeHandler)
-	router.GET("/recipes", recipesHandler.ListRecipesHandler)
-	router.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
-	router.DELETE("/recipes/:id", recipesHandler.DeleteRecipeHandler)
-	router.GET("/recipes/:id", recipesHandler.GetOneRecipeHandler)
-	router.Run()
+
+	authorized := router.Group("/")
+	authorized.Use(AuthAPIKeyMiddleware())
+
+	{
+		router.GET("/recipes", recipesHandler.ListRecipesHandler)
+		router.GET("/recipes/:id", recipesHandler.GetOneRecipeHandler)
+	}
+
+	authorized.POST("/recipes", recipesHandler.NewRecipeHandler)
+	authorized.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
+	authorized.DELETE("/recipes/:id", recipesHandler.DeleteRecipeHandler)
+
+	log.Fatal(router.Run())
 }
