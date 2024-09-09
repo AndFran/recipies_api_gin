@@ -2,50 +2,67 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
+	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"log"
 	"os"
+	"recipies_api_gin/handlers"
 )
 
-func main() {
-	users := map[string]string{
-		"admin":   "1234!!",
-		"AndFran": "1234!!",
-	}
+var recipesHandler *handlers.RecipesHandler
+var authHandler *handlers.AuthHandler
 
+func init() {
 	ctx := context.Background()
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("MONGO_URI")))
 	if err != nil {
-		log.Fatal("error connecting", err, "uri: ", os.Getenv("MONGO_URI"))
+		log.Fatal(err)
 	}
-	if err := client.Ping(ctx, readpref.Primary()); err != nil {
-		log.Fatal("cannot ping", err)
+	if err = client.Ping(ctx, readpref.Primary()); err != nil {
+		log.Fatal(err)
 	}
 
-	collection := client.Database(os.Getenv("MONGO_DATABASE")).Collection("users")
-	h := sha256.New()
+	log.Println("Connected to MongoDB!")
+	collectionRecipes := client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
 
-	for user, password := range users {
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379", //os.Getenv("REDIS_URI"),
+		Password: "",               //os.Getenv("REDIS_PASSWORD"),
+		DB:       0,
+	})
+	status := redisClient.Ping(context.Background())
+	log.Println(status)
 
-		h.Write([]byte(password))
-		pwd := h.Sum(nil)
+	recipesHandler = handlers.NewRecipesHandler(ctx, collectionRecipes, redisClient)
 
-		//pwd := string(h.Sum([]byte(password)))
+	collectionUsers := client.Database(os.Getenv("MONGO_DATABASE")).Collection("users")
+	authHandler = handlers.NewAuthHandler(collectionUsers, ctx)
+}
 
-		_, err = collection.InsertOne(ctx, bson.M{
-			"username": user,
-			"password": hex.EncodeToString(pwd),
-		})
-		if err != nil {
-			log.Fatal(err)
-		}
+func main() {
+	router := gin.Default()
+
+	authorized := router.Group("/")
+	authorized.Use(AuthJWTAuthorizationMiddleware())
+
+	// public access
+	{
+		router.POST("/signin", authHandler.SignInHandler)
+		router.GET("/recipes", recipesHandler.ListRecipesHandler)
 	}
-	fmt.Println("----------")
-	fmt.Println(collection)
+
+	// API key protected
+	{
+		authorized.GET("/recipes/:id", recipesHandler.GetOneRecipeHandler)
+		authorized.POST("/recipes", recipesHandler.NewRecipeHandler)
+		authorized.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
+		authorized.DELETE("/recipes/:id", recipesHandler.DeleteRecipeHandler)
+		//TODO maybe this should not need to be authed to use
+		authorized.POST("/refresh", authHandler.RefreshJWTHandler)
+	}
+
+	log.Fatal(router.Run())
 }
