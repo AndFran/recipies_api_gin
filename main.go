@@ -13,6 +13,7 @@ import (
 )
 
 var recipesHandler *handlers.RecipesHandler
+var authHandler *handlers.AuthHandler
 
 func init() {
 	ctx := context.Background()
@@ -25,7 +26,7 @@ func init() {
 	}
 
 	log.Println("Connected to MongoDB!")
-	collection := client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
+	collectionRecipes := client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379", //os.Getenv("REDIS_URI"),
@@ -35,24 +36,33 @@ func init() {
 	status := redisClient.Ping(context.Background())
 	log.Println(status)
 
-	recipesHandler = handlers.NewRecipesHandler(ctx, collection, redisClient)
+	recipesHandler = handlers.NewRecipesHandler(ctx, collectionRecipes, redisClient)
 
+	collectionUsers := client.Database(os.Getenv("MONGO_DATABASE")).Collection("users")
+	authHandler = handlers.NewAuthHandler(collectionUsers, ctx)
 }
 
 func main() {
 	router := gin.Default()
 
 	authorized := router.Group("/")
-	authorized.Use(AuthAPIKeyMiddleware())
+	authorized.Use(AuthJWTAuthorizationMiddleware())
 
+	// public access
 	{
+		router.POST("/signin", authHandler.SignInHandler)
 		router.GET("/recipes", recipesHandler.ListRecipesHandler)
-		router.GET("/recipes/:id", recipesHandler.GetOneRecipeHandler)
 	}
 
-	authorized.POST("/recipes", recipesHandler.NewRecipeHandler)
-	authorized.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
-	authorized.DELETE("/recipes/:id", recipesHandler.DeleteRecipeHandler)
+	// API key protected
+	{
+		authorized.GET("/recipes/:id", recipesHandler.GetOneRecipeHandler)
+		authorized.POST("/recipes", recipesHandler.NewRecipeHandler)
+		authorized.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
+		authorized.DELETE("/recipes/:id", recipesHandler.DeleteRecipeHandler)
+		//TODO maybe this should not need to be authed to use
+		authorized.POST("/refresh", authHandler.RefreshJWTHandler)
+	}
 
 	log.Fatal(router.Run())
 }
