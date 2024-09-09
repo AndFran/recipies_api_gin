@@ -17,7 +17,6 @@ func main() {
 	users := map[string]string{
 		"admin":   "1234!!",
 		"AndFran": "1234!!",
-		"other":   "1234!!",
 	}
 
 	ctx := context.Background()
