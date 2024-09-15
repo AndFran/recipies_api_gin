@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"net/http"
@@ -25,6 +27,42 @@ func NewAuthHandler(collection *mongo.Collection, ctx context.Context) *AuthHand
 		collection: collection,
 		ctx:        ctx,
 	}
+}
+
+func (h *AuthHandler) SignUpHandler(c *gin.Context) {
+	hash := sha256.New()
+	var user models.User
+	if c.ShouldBind(&user) != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid signup credentials"})
+		return
+	}
+
+	if len(user.Password) < 5 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password is too short"})
+		return
+	}
+
+	hash.Write([]byte(user.Password))
+	pwd := hex.EncodeToString(hash.Sum(nil))
+	cur := h.collection.FindOne(h.ctx, bson.M{"username": user.Username, "password": pwd})
+	if cur.Err() == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user already exists"})
+		return
+	} else if !errors.Is(cur.Err(), mongo.ErrNoDocuments) {
+		log.Println(cur.Err())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	id := primitive.NewObjectID()
+	res, err := h.collection.InsertOne(h.ctx, bson.M{"username": user.Username, "password": pwd, "_id": id})
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	log.Println("new user signup with id", res.InsertedID)
+	c.JSON(http.StatusCreated, user)
 }
 
 func (h *AuthHandler) SignInHandler(c *gin.Context) {
