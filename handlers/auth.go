@@ -62,7 +62,23 @@ func (h *AuthHandler) SignUpHandler(c *gin.Context) {
 		return
 	}
 	log.Println("new user signup with id", res.InsertedID)
-	c.JSON(http.StatusCreated, user)
+
+	expirationTime := time.Now().Add(10 * time.Minute)
+	claims := &jwt.MapClaims{
+		"sub": user.Username,
+		"iss": "recipes_api_gin",
+		"exp": expirationTime.Unix(),
+		"iat": time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"token": tokenString})
 }
 
 func (h *AuthHandler) SignInHandler(c *gin.Context) {
