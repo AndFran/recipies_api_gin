@@ -51,6 +51,7 @@ func main() {
 	// public access
 	{
 		router.POST("/signin", authHandler.SignInHandler)
+		router.POST("/signup", authHandler.SignUpHandler)
 		router.GET("/recipes", recipesHandler.ListRecipesHandler)
 	}
 
